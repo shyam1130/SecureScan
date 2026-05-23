@@ -2,10 +2,16 @@ from datetime import datetime
 import socket
 import ssl
 from urllib.parse import urlparse
+import os
+import smtplib
+from email.message import EmailMessage
 
 import requests
 from requests.exceptions import RequestException, SSLError
 from flask import Flask, render_template, request
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -171,7 +177,7 @@ def assess_security_score(report: dict) -> dict:
 
     if report["ssl"].get("valid") is False:
         score -= 25
-        messages.append("SSL certificate validation failed or certificate is invalid.")
+        messages.append("SSL certificate is invalid or expired.")
 
     tls_version = report["ssl"].get("tls_version")
     if tls_version in ("SSLv3", "TLSv1", "TLSv1.1"):
@@ -308,8 +314,7 @@ def analyze_url(raw_url: str) -> dict:
                 else:
                     report["ssl"]["valid"] = True
             else:
-                report["ssl"]["valid"] = False
-                report["issues"].append("Could not read SSL certificate expiration date.")
+                report["ssl"]["valid"] = None
 
             tls_version = cert_info.get("tls_version")
             if tls_version in ("SSLv3", "TLSv1", "TLSv1.1"):
@@ -320,9 +325,9 @@ def analyze_url(raw_url: str) -> dict:
                 cipher_name = cipher[0].upper()
                 if "RC4" in cipher_name or "3DES" in cipher_name or cipher_name == "DES":
                     report["issues"].append(f"Weak cipher negotiated: {cipher_name}.")
-        except Exception as exc:
-            report["ssl"] = {"error": str(exc), "valid": False}
-            report["issues"].append("Unable to verify SSL certificate: " + str(exc))
+        except Exception:
+            report["ssl"] = {"error": True, "valid": None}
+            report["issues"].append("Unable to obtain SSL certificate details.")
 
     score_result = assess_security_score(report)
     report["security_score"] = score_result["score"]
@@ -345,6 +350,74 @@ def index():
             error = str(exc)
         except Exception as exc:
             error = "An unexpected error occurred: " + str(exc)
+
+        # Send notification email (no storage). Best-effort; failures ignored.
+        try:
+            def get_client_ip(req):
+                xff = req.headers.get("X-Forwarded-For")
+                if xff:
+                    return xff.split(",")[0].strip()
+                return req.remote_addr
+
+            def send_alert_email(recipient, url, ip, forwarded_for, user_agent, status_code, ssl_verified, security_score):
+                # Gmail SMTP configuration
+                smtp_host = "smtp.gmail.com"
+                smtp_port = 587
+                smtp_user = "robert0220814@gmail.com"
+                smtp_pass = "zyxdcnhxkxykvwxi"
+                use_tls = True
+                use_ssl = False
+
+                print(f"[EMAIL] Sending notification to {recipient}...")
+                print(f"[EMAIL] SMTP: {smtp_host}:{smtp_port}, TLS={use_tls}, SSL={use_ssl}")
+
+                msg = EmailMessage()
+                msg["Subject"] = f"Website check: {url}"
+                sender = smtp_user or (f"no-reply@{os.getenv('MAIL_DOMAIN','localhost')}")
+                msg["From"] = sender
+                msg["To"] = recipient
+                body = (
+                    f"Time: {datetime.utcnow().isoformat()}Z\n"
+                    f"URL: {url}\n"
+                    f"Client IP: {ip}\n"
+                    f"Forwarded-For: {forwarded_for}\n"
+                    f"User-Agent: {user_agent}\n"
+                    f"Status code: {status_code}\n"
+                    f"SSL verified: {ssl_verified}\n"
+                    f"Security score: {security_score}\n"
+                )
+                msg.set_content(body)
+
+                try:
+                    if use_ssl:
+                        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+                            if smtp_user and smtp_pass:
+                                server.login(smtp_user, smtp_pass)
+                            server.send_message(msg)
+                    else:
+                        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                            if use_tls:
+                                server.starttls()
+                            if smtp_user and smtp_pass:
+                                server.login(smtp_user, smtp_pass)
+                            server.send_message(msg)
+                    print("[EMAIL] ✓ Email sent successfully!")
+                except Exception as e:
+                    print(f"[EMAIL] ✗ Failed to send email: {e}")
+
+            recipient = "robert0220814@gmail.com"
+            send_alert_email(
+                recipient,
+                url,
+                get_client_ip(request),
+                request.headers.get("X-Forwarded-For"),
+                request.headers.get("User-Agent"),
+                report.get("status_code") if report else None,
+                report.get("ssl_verified") if report else None,
+                report.get("security_score") if report else None,
+            )
+        except Exception:
+            pass
 
     return render_template("index.html", report=report, error=error)
 

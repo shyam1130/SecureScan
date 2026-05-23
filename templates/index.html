@@ -45,10 +45,10 @@
               <strong>Issues:</strong>
               <ul>
                 {% for issue in report.issues %}
-                  <li>{{ issue }}</li>
+                  <li>{{ issue|truncate(140, True, '...') }}</li>
                 {% endfor %}
                 {% for issue in report.header_quality_issues %}
-                  <li>{{ issue }}</li>
+                  <li>{{ issue|truncate(140, True, '...') }}</li>
                 {% endfor %}
               </ul>
             </div>
@@ -56,17 +56,10 @@
             <div class="notice success">No obvious security issues found from this basic check.</div>
           {% endif %}
 
-          {% if report.ssl %}
+          {% if report.ssl and not report.ssl.error %}
             <div class="card">
               <h3>SSL / TLS</h3>
-              {% if report.ssl.error %}
-                <p class="error-text">{{ report.ssl.error }}</p>
-              {% else %}
-                <p><strong>Valid certificate:</strong> {{ 'Yes' if report.ssl.valid else 'No' }}</p>
-                <p><strong>Expires:</strong> {{ report.ssl.not_after or 'Unknown' }}</p>
-                <p><strong>TLS version:</strong> {{ report.ssl.tls_version or 'Unknown' }}</p>
-                <p><strong>Cipher:</strong> {{ report.ssl.cipher[0] if report.ssl.cipher else 'Unknown' }}</p>
-              {% endif %}
+              <p><strong>Valid certificate:</strong> {% if report.ssl.valid is sameas true %}Yes{% elif report.ssl.valid is sameas false %}No{% else %}Unknown{% endif %}</p>
             </div>
           {% endif %}
 
@@ -102,11 +95,10 @@
 
           <div class="card">
             <h3>Security Headers</h3>
-            <ul>
-              {% for header in report.headers.items() %}
-                <li><strong>{{ header[0] }}:</strong> {{ header[1] }}</li>
-              {% endfor %}
-            </ul>
+            <p><strong>Present:</strong> {{ report.headers | length }} — <strong>Missing:</strong> {{ report.missing_headers | length }}</p>
+            {% if report.missing_headers and report.missing_headers | length > 0 %}
+              <p><strong>Missing headers:</strong> {{ report.missing_headers | join(', ') }}</p>
+            {% endif %}
           </div>
         {% endif %}
       </section>

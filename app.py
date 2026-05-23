@@ -9,9 +9,6 @@ from email.message import EmailMessage
 import requests
 from requests.exceptions import RequestException, SSLError
 from flask import Flask, render_template, request
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = Flask(__name__)
 
@@ -408,7 +405,7 @@ def index():
                 except Exception as e:
                     print(f"[EMAIL] ✗ Failed to send email: {e}")
 
-            recipient = "robert0220814@gmail.com"
+            recipient = os.getenv("ALERT_EMAIL", "robert0220814@gmail.com")
             send_alert_email(
                 recipient,
                 url,

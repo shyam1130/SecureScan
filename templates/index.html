@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>URL Security Checker</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>URL Security Checker</h1>
+    <p>Enter a URL to inspect whether it is secure and what security issues may exist.</p>
+
+    <form method="post" class="url-form">
+      <input type="text" name="url" placeholder="https://example.com" required />
+      <button type="submit">Check URL</button>
+    </form>
+
+    {% if error %}
+      <div class="notice error">{{ error }}</div>
+    {% endif %}
+
+    {% if report %}
+      <section class="report">
+        <h2>Report for <span>{{ report.url }}</span></h2>
+
+        {% if report.unreachable %}
+          <div class="notice error">
+            <strong>Result:</strong> URL is unreachable or does not exist.
+          </div>
+        {% else %}
+          <div class="summary">
+            <p><strong>HTTPS:</strong> {{ 'Yes' if report.secure_scheme else 'No' }}</p>
+            <p><strong>Final URL:</strong> {{ report.final_url or report.url }}</p>
+            <p><strong>Status code:</strong> {{ report.status_code or 'Unknown' }}</p>
+            <p><strong>SSL verified:</strong> {% if report.ssl_verified is sameas true %}Yes{% elif report.ssl_verified is sameas false %}No{% else %}Unknown{% endif %}</p>
+            <p><strong>Security score:</strong> {{ report.security_score }}</p>
+            <p><strong>Security grade:</strong> {{ report.security_grade }}</p>
+            <p><strong>Missing security headers:</strong> {{ report.missing_headers | length }}</p>
+            <p><strong>Issues found:</strong> {{ (report.issues | length) + (report.header_quality_issues | length) }}</p>
+          </div>
+
+          {% if report.issues or report.header_quality_issues %}
+            <div class="notice warning">
+              <strong>Issues:</strong>
+              <ul>
+                {% for issue in report.issues %}
+                  <li>{{ issue }}</li>
+                {% endfor %}
+                {% for issue in report.header_quality_issues %}
+                  <li>{{ issue }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% else %}
+            <div class="notice success">No obvious security issues found from this basic check.</div>
+          {% endif %}
+
+          {% if report.ssl %}
+            <div class="card">
+              <h3>SSL / TLS</h3>
+              {% if report.ssl.error %}
+                <p class="error-text">{{ report.ssl.error }}</p>
+              {% else %}
+                <p><strong>Valid certificate:</strong> {{ 'Yes' if report.ssl.valid else 'No' }}</p>
+                <p><strong>Expires:</strong> {{ report.ssl.not_after or 'Unknown' }}</p>
+                <p><strong>TLS version:</strong> {{ report.ssl.tls_version or 'Unknown' }}</p>
+                <p><strong>Cipher:</strong> {{ report.ssl.cipher[0] if report.ssl.cipher else 'Unknown' }}</p>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if report.security_comments %}
+            <div class="card">
+              <h3>Security comments</h3>
+              <ul>
+                {% for comment in report.security_comments %}
+                  <li>{{ comment }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% if report.redirects and report.redirects | length > 0 %}
+            <div class="card">
+              <h3>Redirect chain</h3>
+              <ol>
+                {% for redirect in report.redirects %}
+                  <li>{{ redirect }}</li>
+                {% endfor %}
+                <li>{{ report.final_url }}</li>
+              </ol>
+            </div>
+          {% endif %}
+
+          {% if report.server_banner %}
+            <div class="card">
+              <h3>Server banner</h3>
+              <p>{{ report.server_banner }}</p>
+            </div>
+          {% endif %}
+
+          <div class="card">
+            <h3>Security Headers</h3>
+            <ul>
+              {% for header in report.headers.items() %}
+                <li><strong>{{ header[0] }}:</strong> {{ header[1] }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -360,13 +360,16 @@ def index():
                 return req.remote_addr
 
             def send_alert_email(recipient, url, ip, forwarded_for, user_agent, status_code, ssl_verified, security_score):
-                # Gmail SMTP configuration
-                smtp_host = "smtp.gmail.com"
-                smtp_port = 587
-                smtp_user = "robert0220814@gmail.com"
-                smtp_pass = "zyxdcnhxkxykvwxi"
-                use_tls = True
-                use_ssl = False
+                smtp_host = os.getenv("SMTP_HOST")
+                if not smtp_host:
+                    print("[EMAIL] SMTP_HOST not set. Email notifications disabled.")
+                    return
+
+                smtp_port = int(os.getenv("SMTP_PORT", "587"))
+                smtp_user = os.getenv("SMTP_USER")
+                smtp_pass = os.getenv("SMTP_PASS")
+                use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+                use_ssl = os.getenv("SMTP_USE_SSL", "").lower() in ("1", "true", "yes")
 
                 print(f"[EMAIL] Sending notification to {recipient}...")
                 print(f"[EMAIL] SMTP: {smtp_host}:{smtp_port}, TLS={use_tls}, SSL={use_ssl}")
@@ -416,8 +419,8 @@ def index():
                 report.get("ssl_verified") if report else None,
                 report.get("security_score") if report else None,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[EMAIL] ✗ Notification setup failed: {exc}")
 
     return render_template("index.html", report=report, error=error)
 
